@@ -200,4 +200,14 @@ public interface DataSourceJdbcRuntimeConfig {
      * connection is closed.
      */
     Optional<Duration> readTimeout();
+
+    /**
+     * Sets the maximum duration a connection will wait for the database to reply to any one request,
+     * using the standard JDBC 4.1 {@link java.sql.Connection#setNetworkTimeout} API.
+     * <p>
+     * Unlike {@code readTimeout}, which operates at the socket/driver level for individual read operations,
+     * this timeout is managed by the JDBC {@link java.sql.Connection} object and applies to any pending
+     * database request on the connection, making it the more portable option.
+     */
+    Optional<Duration> networkTimeout();
 }

@@ -317,6 +317,12 @@ public class DataSources {
                     .credential(new AgroalVaultCredentialsProviderPassword(name, credentialsProvider));
         }
 
+        // Set the network timeout configuration if available
+        if (dataSourceJdbcRuntimeConfig.networkTimeout().isPresent()) {
+            Duration networkTimeout = dataSourceJdbcRuntimeConfig.networkTimeout().get();
+            connectionFactoryConfiguration.networkTimeout(networkTimeout);
+        }
+
         // Additional JDBC properties from build time config
         for (Map.Entry<String, String> entry : buildTimeJdbcProperties.entrySet()) {
             connectionFactoryConfiguration.jdbcProperty(entry.getKey(), entry.getValue());
