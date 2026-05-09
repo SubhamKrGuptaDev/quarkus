@@ -184,6 +184,9 @@ public class LoggingJsonRecorder {
         Set<String> excludedKeys = new HashSet<>(overridableJsonConfig.excludedKeys());
         excludedKeys.add(Key.LOGGER_CLASS_NAME.getKey());
         excludedKeys.add(Key.RECORD.getKey());
+        // mdc and ndc are not ECS fields; exclude them from ECS output.
+        excludedKeys.add(Key.MDC.getKey());
+        excludedKeys.add(Key.NDC.getKey());
 
         Map<String, AdditionalField> additionalFields = new LinkedHashMap<>(overridableJsonConfig.additionalFields());
         additionalFields.computeIfAbsent(ECS_VERSION.getKey(), k -> new AdditionalField("1.12.2", Type.STRING));

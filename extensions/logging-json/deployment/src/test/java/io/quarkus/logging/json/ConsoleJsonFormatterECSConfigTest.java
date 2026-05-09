@@ -54,6 +54,7 @@ public class ConsoleJsonFormatterECSConfigTest {
                 .as("error.stack_trace must be a string, not an object")
                 .isTrue();
         Assertions.assertThat(node.get("error.stack_trace").asText())
+                .doesNotStartWith(": ")
                 .contains("IllegalStateException")
                 .contains("This is a startup exception");
 
@@ -81,6 +82,21 @@ public class ConsoleJsonFormatterECSConfigTest {
         Assertions.assertThat(node.has("log.level")).isTrue();
         Assertions.assertThat(node.has("log.logger")).isTrue();
         Assertions.assertThat(node.has("ecs.version")).isTrue();
+
+        // mdc and ndc are not ECS fields and must be absent
+        Assertions.assertThat(node.has("mdc"))
+                .as("mdc is not an ECS field and must be excluded")
+                .isFalse();
+        Assertions.assertThat(node.has("ndc"))
+                .as("ndc is not an ECS field and must be excluded")
+                .isFalse();
+
+        // process.name must be the short executable name, not the full JVM path
+        if (node.has("process.name")) {
+            Assertions.assertThat(node.get("process.name").asText())
+                    .as("process.name must be a basename, not a full path")
+                    .doesNotContain("/");
+        }
     }
 
     @Test
@@ -95,5 +111,8 @@ public class ConsoleJsonFormatterECSConfigTest {
         Assertions.assertThat(node.has("error.stack_trace")).isFalse();
         Assertions.assertThat(node.has("exception")).isFalse();
         Assertions.assertThat(node.get("message").asText()).isEqualTo("Hello ECS");
+        // mdc and ndc must also be absent for non-exception records
+        Assertions.assertThat(node.has("mdc")).isFalse();
+        Assertions.assertThat(node.has("ndc")).isFalse();
     }
 }

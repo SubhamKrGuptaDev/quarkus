@@ -130,7 +130,14 @@ public class JsonFormatter extends org.jboss.logmanager.formatters.JsonFormatter
     @Override
     protected Generator createGenerator(final Writer writer) {
         Generator superGenerator = super.createGenerator(writer);
-        return new FormatterJsonGenerator(superGenerator, this.excludedKeys);
+        // In ECS mode, pass the resolved stack trace key so the generator can strip
+        // the leading ": " that jboss's StackTraceFormatter unconditionally prepends
+        // to the rendered stack trace string.
+        // Also pass the process name key so the generator can extract just the basename
+        // from the full JVM path (e.g. /usr/lib/jvm/.../bin/java → java).
+        String stackTraceKeyToTrim = logFormat.equals(LogFormat.ECS) ? getKey(Key.STACK_TRACE) : null;
+        String processNameKey = logFormat.equals(LogFormat.ECS) ? getKey(Key.PROCESS_NAME) : null;
+        return new FormatterJsonGenerator(superGenerator, this.excludedKeys, stackTraceKeyToTrim, processNameKey);
     }
 
     @Override
@@ -305,10 +312,26 @@ public class JsonFormatter extends org.jboss.logmanager.formatters.JsonFormatter
 
         private final Generator delegate;
         private final Set<String> excludedKeys;
+        /**
+         * When non-null, values written under this key will have a leading {@code ": "} stripped.
+         * jboss's {@code StackTraceFormatter.renderStackTrace} unconditionally prepends {@code ": "}
+         * before the exception class name. ECS requires a clean stack trace string.
+         */
+        private final String stackTraceKeyToTrim;
+        /**
+         * When non-null, values written under this key will be reduced to their basename.
+         * jboss-logmanager records the full JVM path as the process name
+         * (e.g. {@code /usr/lib/jvm/java-25-openjdk-amd64/bin/java}). ECS requires only
+         * the short process name (e.g. {@code java}).
+         */
+        private final String processNameKey;
 
-        private FormatterJsonGenerator(final Generator delegate, final Set<String> excludedKeys) {
+        private FormatterJsonGenerator(final Generator delegate, final Set<String> excludedKeys,
+                final String stackTraceKeyToTrim, final String processNameKey) {
             this.delegate = delegate;
             this.excludedKeys = excludedKeys;
+            this.stackTraceKeyToTrim = stackTraceKeyToTrim;
+            this.processNameKey = processNameKey;
         }
 
         @Override
@@ -344,7 +367,19 @@ public class JsonFormatter extends org.jboss.logmanager.formatters.JsonFormatter
         @Override
         public Generator add(final String key, final String value) throws Exception {
             if (!excludedKeys.contains(key)) {
-                delegate.add(key, value);
+                String actual = value;
+                // Strip the leading ": " that jboss's StackTraceFormatter prepends to the rendered
+                // stack trace string. Only applied to the specific key configured for this purpose.
+                if (stackTraceKeyToTrim != null && stackTraceKeyToTrim.equals(key)
+                        && value != null && value.startsWith(": ")) {
+                    actual = value.substring(2);
+                    // Extract the basename from a full path for the process name.
+                    // ECS process.name must be the short executable name, not a full filesystem path.
+                } else if (processNameKey != null && processNameKey.equals(key)
+                        && value != null && value.contains("/")) {
+                    actual = value.substring(value.lastIndexOf('/') + 1);
+                }
+                delegate.add(key, actual);
             }
             return this;
         }
